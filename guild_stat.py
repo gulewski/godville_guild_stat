@@ -117,7 +117,7 @@ if show_stat == 1:
     print('\nИзменения по статусам питомцев:\n', pet_change_status)
 
 # запись в файл всей статистики в сыром виде (файл results.txt)
-write_stat_file = 0
+write_stat_file = 1
 if write_stat_file == 1:
     f = open('results.txt', 'w', encoding='utf-8')
     f.write('Ушедшие:\n' + str(god_leaved) + '\n\n')
@@ -423,7 +423,7 @@ for key, value in new_bosses.items():
                          f'мощью в {value[1]}%\n'
 
 # формирование общей строки для копирования на форум
-write_forum_file = 0
+write_forum_file = 1
 if write_forum_file == 1:
     text = ''
     text += '"За чашкой вечернего чая":https://d.radikal.ru/d14/2004/7b/2fd6bd48f5e3.png\n\n' \
