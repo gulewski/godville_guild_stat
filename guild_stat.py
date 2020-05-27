@@ -1,4 +1,5 @@
 import json
+import godville_stat_functions as gsf
 
 # прописываем имена файлов для старта статистики и финиша
 path_old = 'old.json'
@@ -23,37 +24,12 @@ except KeyError:
     data_new = json.loads(json_new)
 
 
-# функция сортировки словаря по заданному параметру
-def sort_dict(dictionary, param):
-    result = {}
-    list_d = list(dictionary.items())
-    list_d.sort(key=lambda t: t[1][param])
-    list_d.reverse()
-    for item in list_d:
-        result[item[0]] = item[1]
-    return result
-
-
-# упаковка списков
-def list_flatten(lst):
-    while lst:
-        sublist = lst.pop(0)
-        if isinstance(sublist, list):
-            lst = sublist + lst
-        else:
-            yield sublist
-
-
 # формирование списков богов
 god_list_old = list(data_old.keys())  # список богов из начала статистики
 god_list_new = list(data_new.keys())  # список богов из конца статистики
 god_list_actual = sorted(list(set(god_list_old) & set(god_list_new)))  # список богов, которые есть в обоих списках
 god_leaved = sorted(list(set(god_list_old).difference(set(god_list_new))))  # ушедшие боги
 god_entered = sorted(list(set(god_list_new).difference(set(god_list_old))))  # пришедшие боги
-
-
-# просто для интереса, сколько раз срабатывал пустой except
-exceptions = 0
 
 # переменные для всех позиций статистики
 new_level_list_all, new_level_list_worthy = {}, {}  # списки богов с новыми уровнями (все и кардинал+)
@@ -62,7 +38,7 @@ clan_position_change = {}  # изменение ранга в гильдии
 bricks_change = {}  # изменение по собранным кирпичам
 wood_change, savings_change = {}, {}  # изменение по собранным брёвнам и отложенной пенсии
 words_change = {}  # изменение по собранным словам
-female_change, male_change, fm_change, = {}, {}, {}  # изменения по тварям (ж, м, всё вместе)
+fm_change = {}  # изменения по тварям
 fight_change = {}  # изменения по боям (разница побед и поражений)
 new_temple, new_shop, new_lab = [], [], []  # списки богов с новыми храмами/ковчегами/лавками/лабами
 new_arks, new_bosses = {}, {}  # информация по богам с новым боссом
@@ -77,190 +53,44 @@ clan_positions_unworthy = ['фанат', 'рекрут', 'стажёр', 'аде
 
 # формирование списков по всем позициям статистики
 for god in god_list_actual:
-
-    # уровни героя
-    if data_new[god]['level'] - data_old[god]['level'] > 0:  # если есть изменение в уровнях между датами
-        if data_new[god]['clan_position'] not in clan_positions_unworthy:  # если бог со званием кардинал+
-            # записываем его в список для статистики по уровням
-            new_level_list_worthy[god] = [data_new[god]['level'], data_new[god]['level'] - data_old[god]['level']]
-        # в любом случае записываем бога в список изменения уровней
-        new_level_list_all[god] = [data_new[god]['level'], data_new[god]['level'] - data_old[god]['level']]
-
+    # обновляем словари с уровнями героев
+    gsf.update_level_list(data_new, data_old, god, new_level_list_worthy, new_level_list_all)
     # уровни торговца
-    try:  # проверяем, есть ли у бога вообще лавка через запрос в json
-        if data_new[god]['t_level'] - data_old[god]['t_level'] > 0:  # если есть и уровень лавки изменился
-            # записываем его в список богов с изменившимся торговым уровнем
-            new_t_level_list[god] = [data_new[god]['t_level'], data_new[god]['t_level'] - data_old[god]['t_level']]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
+    gsf.update_trade_level_list(data_new, data_old, god, new_t_level_list)
     # позиция в гильдии
-    if data_new[god]['clan_position'] != data_old[god]['clan_position']:  # если старая и новая позиции не равны
-        clan_position_change[god] = data_new[god]['clan_position']  # вносим бога в список
-
+    gsf.update_clan_position_list(data_new, data_old, god, clan_position_change)
     # количество собранных кирпичей и новые храмы
-    if data_new[god]['bricks_cnt'] - data_old[god]['bricks_cnt'] > 0:  # если количество кирпичей изменилось
-        if data_new[god]['bricks_cnt'] == 1000:  # и новое число равно 10000
-            new_temple.append(god)  # вносим бога в список построивших храм
-        # вносим бога в список изменений по количеству кирпичей
-        bricks_change[god] = [data_new[god]['bricks_cnt'], data_new[god]['bricks_cnt'] - data_old[god]['bricks_cnt']]
-
+    gsf.update_brickers_and_temples(data_new, data_old, god, bricks_change, new_temple)
     # количество собранных брёвен и новые ковчеги
-    try:  # проверяем, начал ли бог строить ковчег через запрос в json
-        if data_new[god]['wood_cnt'] - data_old[god]['wood_cnt'] > 0:  # если да и количество изменилось
-            if data_old[god]['wood_cnt'] // 1000 != data_new[god]['wood_cnt'] // 1000:  # и тысячные разряды разные
-                # если инфа по этой палубе уже есть в словаре
-                if data_new[god]['wood_cnt'] // 1000 in new_arks:
-                    # добавляем нового бога в эту запись
-                    new_arks[data_new[god]['wood_cnt'] // 1000].append(god)
-                # если инфы по этой палубе нет в словаре
-                else:
-                    # создаём и записываем туда бога
-                    new_arks[data_new[god]['wood_cnt'] // 1000] = [god]
-            # вносим бога в список изменений по количеству брёвен
-            wood_change[god] = [data_new[god]['wood_cnt'], data_new[god]['wood_cnt'] - data_old[god]['wood_cnt']]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
+    gsf.update_wooders_and_arks(data_new, data_old, god, wood_change, new_arks)
     # количество отложенной пенсии и новые лавки
-    try:  # проверяем, начал ли бог собирать пенсию через запрос в json
-        if data_new[god]['savings'] != data_old[god]['savings']:  # если да и количество изменилось
-            if data_new[god]['savings'] == '30000 тысяч':  # и новое число равно "30000 тысяч"
-                new_shop.append(god)  # вносим бога в список построивших лавку
-            # вносим бога в список изменений по сбору пенсии
-            savings_change[god] = [data_new[god]['savings'],
-                                   int(data_new[god]['savings'].split(' ')[0]) -
-                                   int(data_old[god]['savings'].split(' ')[0])]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
-    # количество собранных тварей (самцов)
-    try:  # проверяем, начал ли бог собирать тварей (самцов) через запрос в json
-        if data_new[god]['ark_m'] - data_old[god]['ark_m'] > 0:  # если да и количество изменилось
-            # вносим бога в список изменений по количеству тварей (самцов)
-            male_change[god] = [data_new[god]['ark_m'], data_new[god]['ark_m'] - data_old[god]['ark_m']]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-    # количество собранных тварей (самок)
-    try:  # проверяем, начал ли бог собирать тварей (самок) через запрос в json
-        if data_new[god]['ark_f'] - data_old[god]['ark_f'] > 0:  # если да и количество изменилось
-            # вносим бога в список изменений по количеству тварей (самок)
-            female_change[god] = [data_new[god]['ark_f'], data_new[god]['ark_f'] - data_old[god]['ark_f']]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-    # общая статистика по количеству собранных тварей (самцов и самок)
-    try:  # проверяем, начал ли бог собирать тварей (самцов и самок) через запрос в json
-        # если да, формируем словарь со всеми изменениями
-        fm_change[god] = [str(data_new[god]['ark_m']) + 'м/' + str(data_new[god]['ark_f']) + 'ж',  # общее количество
-                          male_change[god][1],  # изменение по самцам
-                          female_change[god][1],  # изменение по самкам
-                          male_change[god][1] + female_change[god][1]]  # изменение по самцам и самкам вместе
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
-    # новые лаборатории
-    try:  # проверяем, начал ли бог собирать тварей (самцов и самок) через запрос в json
-        # если да и оба новых счётчика равны тысяче, а также один из старых счётчиков не равен тысяче
-        if (data_new[god]['ark_m'] == 1000 and data_new[god]['ark_f'] == 1000) and \
-                (data_old[god]['ark_m'] < 1000 or data_old[god]['ark_f'] < 1000):
-            new_lab.append(god)  # вносим бога в список построивших лабораторию
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
+    gsf.update_savers_and_shops(data_new, data_old, god, savings_change, new_shop)
+    # общая статистика по количеству собранных тварей (самцов и самок) и новые лабы
+    gsf.update_fm_and_labs(data_new, data_old, god, fm_change, new_lab)
     # новые боссы
-    try:  # проверяем, есть ли изменения в имени или мощи босса через запрос в json
-        if data_old[god]['boss_name'] != data_new[god]['boss_name'] or \
-                data_old[god]['boss_power'] != data_new[god]['boss_power']:
-            # если да, вносим бога в список ожививших нового босса
-            new_bosses[god] = [data_new[god]['boss_name'], data_new[god]['boss_power']]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
+    gsf.update_bosses(data_new, data_old, god, new_bosses)
     # количество вписанных слов в книгу
-    try:  # проверяем, начал ли бог писать книгу через запрос в json
-        if data_new[god]['words'] - data_old[god]['words'] > 0:  # если да и количество изменилось
-            # вносим бога в список изменений по количеству слов
-            words_change[god] = [data_new[god]['words'], data_new[god]['words'] - data_old[god]['words']]
-    except KeyError:  # если для бога такого ключа нет, увеличиваем счётчик
-        exceptions += 1
-        pass
-
+    gsf.update_writers(data_new, data_old, god, words_change)
     # изменение в счётчике дуэлей
-    change_won = data_new[god]['arena_won'] - data_old[god]['arena_won']  # изменение побед текущего бога
-    change_los = data_new[god]['arena_lost'] - data_old[god]['arena_lost']  # изменение поражений текущего бога
-    if change_won > 0 or change_los > 0:  # если количество побед или поражений изменилось
-        # вносим бога в список изменений по аренной статистике
-        fight_change[god] = [str(data_new[god]['arena_won']) + ' побед/' +
-                             str(data_new[god]['arena_lost']) + ' поражений',
-                             change_won,  # изменение по победам
-                             change_los,  # изменение по поражениям
-                             change_won - change_los  # разница побед и поражений
-                             ]
-
+    gsf.update_fighters(data_new, data_old, god, fight_change)
     # питомцы
-    try:  # проверяем, был ли у бога питомец
-        check = data_old[god]['pet']['pet_level']
-        try:  # если был, проверяем, есть ли у бога питомец сейчас
-            check = data_new[god]['pet']['pet_level']
-            # если питомец был раньше, есть сейчас, в обоих случаях имел уровень и изменил уровень на больший
-            if data_new[god]['pet']['pet_level'] - data_old[god]['pet']['pet_level'] > 0:
-                if data_new[god]['clan_position'] not in clan_positions_unworthy:  # если бог со званием кардинал+
-                    # записываем его в список для статистики по уровням питомцев
-                    pet_change_level_worthy[god] = [data_new[god]['pet']['pet_class'],
-                                                    data_new[god]['pet']['pet_level'],
-                                                    data_new[god]['pet']['pet_level'] -
-                                                    data_old[god]['pet']['pet_level']
-                                                    ]
-                # в любом случае записываем бога в список изменения уровней питомцев
-                pet_change_level_all[god] = [data_new[god]['pet']['pet_class'],
-                                             data_new[god]['pet']['pet_level'],
-                                             data_new[god]['pet']['pet_level'] - data_old[god]['pet']['pet_level']]
-            elif data_new[god]['pet']['pet_level'] - data_old[god]['pet']['pet_level'] < 0:
-                pet_change_status['Герой завёл нового питомца'].append([god, data_new[god]['pet']['pet_class']])
-        except TypeError:
-            # проверяем, был ли у него уровень раньше
-            if isinstance(data_old[god]['pet']['pet_level'], int):
-                # если да, а сейчас нет, делаем пометку
-                pet_change_status['Питомец потерял уровень'].append(god)
-            # если нет, проверяем, есть ли у него уровень сейчас
-            elif isinstance(data_new[god]['pet']['pet_level'], int):
-                # если да, делаем пометку
-                pet_change_status['Герой завёл нового питомца'].append([god, data_new[god]['pet']['pet_class']])
-        except KeyError:  # если у бога питомец был, а сейчас его нет
-            #  вносим бога в список с пометкой о потере питомца
-            pet_change_status['Герой остался без питомца'].append(god)
-    except KeyError:  # если у бога питомца не было
-        try:  # проверяем, есть ли он сейчас
-            check = data_new[god]['pet']['pet_level']
-            # если появился, вносим бога в список с пометкой о новом питомце
-            pet_change_status['Герой завёл нового питомца'].append([god, data_new[god]['pet']['pet_class']])
-        except KeyError:  # если не было и не появился, увеличиваем счётчик
-            exceptions += 1
-            pass
+    gsf.update_petters(data_new, data_old, god, pet_change_level_worthy, pet_change_level_all, pet_change_status)
 
 # сортируем все списки
 god_leaved = sorted(god_leaved)
 god_entered = sorted(god_entered)
-new_level_list_all = sort_dict(new_level_list_all, 1)  # по количеству полученных уровней
-new_level_list_worthy = sort_dict(new_level_list_worthy, 0)  # по уровню
-new_t_level_list = sort_dict(new_t_level_list, 0)  # по уровню
-bricks_change = sort_dict(bricks_change, 1)  # по количеству собранных кирпичей
-wood_change = sort_dict(wood_change, 1)  # по количеству собранных брёвен
+new_level_list_all = gsf.sort_dict(new_level_list_all, 1)  # по количеству полученных уровней
+new_level_list_worthy = gsf.sort_dict(new_level_list_worthy, 0)  # по уровню
+new_t_level_list = gsf.sort_dict(new_t_level_list, 0)  # по уровню
+bricks_change = gsf.sort_dict(bricks_change, 1)  # по количеству собранных кирпичей
+wood_change = gsf.sort_dict(wood_change, 1)  # по количеству собранных брёвен
 new_arks = sorted(new_arks.items())  # по новым палубам
-savings_change = sort_dict(savings_change, 1)  # по количеству отложенной пенсии
-fm_change = sort_dict(fm_change, 3)  # по сумме собранных самцов и самок
-words_change = sort_dict(words_change, 1)  # по количеству вписанных слов
-fight_change = sort_dict(fight_change, 3)  # по разнице побед-поражений
-pet_change_level_all = sort_dict(pet_change_level_all, 1)  # по уровню питомца
-pet_change_level_worthy = sort_dict(pet_change_level_worthy, 1)  # по уровню питомца
+savings_change = gsf.sort_dict(savings_change, 1)  # по количеству отложенной пенсии
+fm_change = gsf.sort_dict(fm_change, 3)  # по сумме собранных самцов и самок
+words_change = gsf.sort_dict(words_change, 1)  # по количеству вписанных слов
+fight_change = gsf.sort_dict(fight_change, 3)  # по разнице побед-поражений
+pet_change_level_all = gsf.sort_dict(pet_change_level_all, 1)  # по уровню питомца
+pet_change_level_worthy = gsf.sort_dict(pet_change_level_worthy, 1)  # по уровню питомца
 
 # сырая инфа по показу всего собранного в консоль
 show_stat = 1
@@ -287,7 +117,7 @@ if show_stat == 1:
     print('\nИзменения по статусам питомцев:\n', pet_change_status)
 
 # запись в файл всей статистики в сыром виде (файл results.txt)
-write_stat_file = 1
+write_stat_file = 0
 if write_stat_file == 1:
     f = open('results.txt', 'w', encoding='utf-8')
     f.write('Ушедшие:\n' + str(god_leaved) + '\n\n')
@@ -390,7 +220,7 @@ while i < len(bricks_list) - 1:
 # для каждого места
 for key, value in bricks_list_for_places.items():
     # распаковываем список, чтобы получить один список вместо нескольких
-    bricks_list_for_places[key] = list(list_flatten(value))
+    bricks_list_for_places[key] = list(gsf.list_flatten(value))
     # собираем строку
     bricks_change_for_text += f'{key} {" ".join(bricks_list_for_places[key])[:-1]}\n'
 
@@ -426,7 +256,7 @@ while i < len(wood_list) - 1:
 # для каждого места
 for key, value in wood_list_for_places.items():
     # распаковываем список, чтобы получить один список вместо нескольких
-    wood_list_for_places[key] = list(list_flatten(value))
+    wood_list_for_places[key] = list(gsf.list_flatten(value))
     # собираем строку
     wood_change_for_text += f'{key} {" ".join(wood_list_for_places[key])[:-1]}\n'
 
@@ -469,7 +299,7 @@ while i < len(fm_list) - 1:
 # для каждого места
 for key, value in fm_list_for_places.items():
     # распаковываем список, чтобы получить один список вместо нескольких
-    fm_list_for_places[key] = list(list_flatten(value))
+    fm_list_for_places[key] = list(gsf.list_flatten(value))
     # собираем строку
     fm_change_for_text += f'{key} {" ".join(fm_list_for_places[key])[:-1]}\n'
 
@@ -505,7 +335,7 @@ while i < len(savings_list) - 1:
 # для каждого места
 for key, value in savings_list_for_places.items():
     # распаковываем список, чтобы получить один список вместо нескольких
-    savings_list_for_places[key] = list(list_flatten(value))
+    savings_list_for_places[key] = list(gsf.list_flatten(value))
     # собираем строку
     savings_change_for_text += f'{key} {" ".join(savings_list_for_places[key])[:-1]}\n'
 
@@ -541,7 +371,7 @@ while i < len(words_list) - 1:
 # для каждого места
 for key, value in words_list_for_places.items():
     # распаковываем список, чтобы получить один список вместо нескольких
-    words_list_for_places[key] = list(list_flatten(value))
+    words_list_for_places[key] = list(gsf.list_flatten(value))
     # собираем строку
     words_change_for_text += f'{key} {" ".join(words_list_for_places[key])[:-1]}\n'
 
@@ -580,7 +410,7 @@ while i < len(fight_list) - 1:
 # для каждого места
 for key, value in fight_list_for_places.items():
     # распаковываем список, чтобы получить один список вместо нескольких
-    fight_list_for_places[key] = list(list_flatten(value))
+    fight_list_for_places[key] = list(gsf.list_flatten(value))
     # собираем строку
     fight_change_for_text += f'{key} {" ".join(fight_list_for_places[key])[:-1]}\n'
 
@@ -593,7 +423,7 @@ for key, value in new_bosses.items():
                          f'мощью в {value[1]}%\n'
 
 # формирование общей строки для копирования на форум
-write_forum_file = 1
+write_forum_file = 0
 if write_forum_file == 1:
     text = ''
     text += '"За чашкой вечернего чая":https://d.radikal.ru/d14/2004/7b/2fd6bd48f5e3.png\n\n' \
