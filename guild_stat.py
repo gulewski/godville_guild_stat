@@ -1,4 +1,5 @@
 import json
+import random
 import godville_stat_functions as gsf
 
 # прописываем имена файлов для старта статистики и финиша
@@ -22,7 +23,6 @@ try:
     data_new = json.loads(json_new)['data']
 except KeyError:
     data_new = json.loads(json_new)
-
 
 # формирование списков богов
 god_list_old = list(data_old.keys())  # список богов из начала статистики
@@ -424,10 +424,17 @@ for key, value in new_bosses.items():
 
 # формирование общей строки для копирования на форум
 write_forum_file = 1
+pictures = [
+    'https://d.radikal.ru/d14/2004/7b/2fd6bd48f5e3.png',
+    'https://d.radikal.ru/d29/2005/b7/2270382ebc9f.png',
+    'https://d.radikal.ru/d41/2005/45/4c9f508f3c83.png',
+    'https://c.radikal.ru/c43/2005/ac/ed4495d23e6b.png',
+    'https://d.radikal.ru/d34/2005/a7/d9ccca6bcbca.png',
+]
 if write_forum_file == 1:
     text = ''
-    text += '"За чашкой вечернего чая":https://d.radikal.ru/d14/2004/7b/2fd6bd48f5e3.png\n\n' \
-            'Цт. *Чеширские чиселки*\n\n'
+    text += f'"За чашкой вечернего чая":{random.choice(pictures)}\n\n' \
+            f'Цт. *Чеширские чиселки*\n\n'
     if len(god_leaved) > 0:
         text += f'📤 *Ушли из гильдии* - {len(god_leaved)} богов:\n{", ".join(god_leaved)}\n\n'
     if len(god_entered) > 0:
